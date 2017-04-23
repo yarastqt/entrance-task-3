@@ -4,16 +4,30 @@
  * Сервис-воркер, обеспечивающий оффлайновую работу избранного
  */
 
-const CACHE_VERSION = '1.0.0-broken';
+const CACHE_VERSION = '1.1.0';
+const assets = [
+    '/',
+    '/gifs.html',
+    '/assets/blocks.js',
+    '/assets/star.svg',
+    '/assets/style.css',
+    '/assets/templates.js',
+    '/vendor/bem-components-dist-5.0.0/touch-phone/bem-components.dev.css',
+    '/vendor/bem-components-dist-5.0.0/touch-phone/bem-components.dev.js',
+    '/vendor/kv-keeper.js-1.0.4/kv-keeper.js'
+];
 
 importScripts('../vendor/kv-keeper.js-1.0.4/kv-keeper.js');
 
 
 self.addEventListener('install', event => {
-    const promise = preCacheAllFavorites()
-        // Вопрос №1: зачем нужен этот вызов?
-        .then(() => self.skipWaiting())
-        .then(() => console.log('[ServiceWorker] Installed!'));
+    const promise = Promise.all([
+        preCacheAllAssets(),
+        preCacheAllFavorites()
+    ])
+    // Вопрос №1: зачем нужен этот вызов?
+    .then(() => self.skipWaiting())
+    .then(() => console.log('[ServiceWorker] Installed!'));
 
     event.waitUntil(promise);
 });
@@ -38,8 +52,7 @@ self.addEventListener('fetch', event => {
 
     let response;
     if (needStoreForOffline(cacheKey)) {
-        response = caches.match(cacheKey)
-            .then(cacheResponse => cacheResponse || fetchAndPutToCache(cacheKey, event.request));
+        response = fetchAndPutToCache(cacheKey, event.request);
     } else {
         response = fetchWithFallbackToCache(event.request);
     }
@@ -53,6 +66,11 @@ self.addEventListener('message', event => {
     event.waitUntil(promise);
 });
 
+// Положить в новый кеш всю статику необходимую для работы в офлайн режиме
+function preCacheAllAssets() {
+    return caches.open(CACHE_VERSION)
+        .then(cache => cache.addAll(assets));
+}
 
 // Положить в новый кеш все добавленные в избранное картинки
 function preCacheAllFavorites() {
@@ -127,7 +145,8 @@ function deleteObsoleteCaches() {
 function needStoreForOffline(cacheKey) {
     return cacheKey.includes('vendor/') ||
         cacheKey.includes('assets/') ||
-        cacheKey.endsWith('jquery.min.js');
+        cacheKey.endsWith('jquery.min.js') ||
+        cacheKey.endsWith('/');
 }
 
 // Скачать и добавить в кеш
